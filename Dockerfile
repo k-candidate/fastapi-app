@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM python:3.14-slim AS builder
 
 WORKDIR /app
 
@@ -9,13 +9,21 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 COPY pyproject.toml uv.lock ./
 
 # Install dependencies
-RUN uv sync --frozen --no-install-project --no-dev
+RUN uv sync --frozen --no-install-project --no-dev --compile-bytecode
 
 # Copy source code
 COPY . .
 
 # Install the project itself
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev --compile-bytecode
+
+FROM nvcr.io/nvidia/distroless/python:3.14-v4.0.10
+
+WORKDIR /app
+ENV PATH="/app/.venv/bin:${PATH}" \
+    PYTHONUNBUFFERED=1
+
+COPY --from=builder /app /app
 
 EXPOSE 8000
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
